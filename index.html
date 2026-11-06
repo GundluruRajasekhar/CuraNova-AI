@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VitalGPT-Tasks</title>
+<style>
+:root{--bg:#F3F6F4;--card:#fff;--ink:#12261F;--mut:#5B6F67;--pri:#0E5A52;--on:#fff;--bad:#D6453D;--warn:#C98A12;--ln:#D7E0DB}
+@media(prefers-color-scheme:dark){:root{--bg:#0D1815;--card:#15251F;--ink:#E7F0EC;--mut:#8FA69C;--pri:#3FC1AE;--on:#06231E;--ln:#25382F}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Georgia,'Times New Roman',serif}
+h1,h2,h3,button,input,select,textarea,nav,label,.sans{font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+#app{display:grid;grid-template-columns:210px 1fr;min-height:100vh}
+nav{background:var(--pri);color:var(--on);padding:16px 10px;display:flex;flex-direction:column;gap:4px}
+nav b{font-size:20px;padding:6px 10px 14px}nav button{background:none;border:0;color:inherit;text-align:left;padding:10px;border-radius:6px;cursor:pointer;font-size:15px;opacity:.85}
+nav button.on,nav button:hover{background:rgba(255,255,255,.18);opacity:1}
+main{padding:24px;max-width:980px;width:100%}h2{margin:0 0 12px}
+.card{background:var(--card);border:1px solid var(--ln);border-radius:10px;padding:16px;margin-bottom:14px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+input,select,textarea{padding:9px;border:1px solid var(--ln);border-radius:6px;background:var(--bg);color:var(--ink);font-size:15px}
+button.p{background:var(--pri);color:var(--on);border:0;border-radius:6px;padding:9px 16px;font-weight:600;cursor:pointer}
+button.d{background:var(--bad);color:#fff;border:0;border-radius:6px;padding:12px 22px;font-weight:700;cursor:pointer;font-size:17px}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--warn);outline-offset:2px}
+.big{font:700 40px system-ui;margin:0}.mut{color:var(--mut);font-size:14px}.msg{padding:10px 12px;border-radius:8px;margin:8px 0;white-space:pre-wrap}
+.u{background:var(--bg);margin-left:20%}.a{background:var(--card);border:1px solid var(--ln);margin-right:10%}.tag{font:600 12px system-ui;color:var(--pri)}
+#cb{max-height:420px;overflow:auto}canvas{width:100%;height:180px}.hide{display:none}
+#auth{max-width:380px;margin:12vh auto;padding:0 16px}
+@media(max-width:700px){#app{grid-template-columns:1fr}nav{flex-direction:row;overflow:auto}nav b{display:none}}
+</style></head><body>
+<div id="auth" class="hide"><div class="card"><h2>VitalGPT-Tasks</h2><p class="mut">Sign in to keep your health history.</p>
+<div class="row"><input id="em" type="email" placeholder="Email" aria-label="Email"><input id="pw" type="password" placeholder="Password (6+ characters)" aria-label="Password"></div>
+<p class="row"><button class="p" onclick="auth('in')">Sign in</button><button class="p" onclick="auth('up')">Create account</button></p><p id="aerr" class="mut"></p></div></div>
+<div id="app" class="hide"><nav><b>VitalGPT-Tasks</b>
+<button data-t="dash" class="on">Dashboard</button><button data-t="chat">AI assistant</button><button data-t="rep">Report analysis</button><button data-t="vit">Vitals and risk</button><button data-t="med">Medicines</button><button data-t="sos">Emergency</button><button data-t="set">Settings</button><button onclick="out()">Sign out</button></nav>
+<main>
+<section id="dash"><h2>Dashboard</h2><div class="grid"><div class="card"><div class="mut">Risk score (0-100)</div><p class="big" id="rs">-</p><div class="mut" id="rl">Log vitals to calculate</div></div>
+<div class="card"><div class="mut">Medicine adherence</div><p class="big" id="ad">-</p></div>
+<div class="card"><div class="mut">AI agent calls</div><p class="big" id="ac">0</p><div class="mut" id="al">avg latency -</div></div></div>
+<div class="card"><h3>Heart rate trend</h3><canvas id="cv" width="900" height="180"></canvas></div>
+<div class="card"><h3>Agent activity log</h3><div id="log" class="mut">No activity yet.</div></div></section>
+
+<section id="chat" class="hide"><h2>AI assistant (9-agent orchestrator)</h2>
+<div class="card"><div id="cb"></div><div class="row"><input id="ci" style="flex:1" placeholder="Ask about symptoms, food, sleep, medicines..." aria-label="Message"><button class="p" onclick="send()">Send</button><button class="p" id="mic" onclick="mic()">Speak</button></div>
+<label class="mut"><input type="checkbox" id="tts"> Read answers aloud</label></div></section>
+
+<section id="rep" class="hide"><h2>Medical report analysis</h2><div class="card"><p class="mut">Upload a lab report (image, PDF or text). It is sent to Gemini with your key and is not stored.</p>
+<input type="file" id="rf" accept="image/*,application/pdf,text/plain"> <button class="p" onclick="report()">Analyse</button><div id="ro" class="msg a hide"></div></div></section>
+
+<section id="vit" class="hide"><h2>Vitals and risk detection</h2><div class="card"><div class="row">
+<input id="v_hr" type="number" placeholder="Heart rate bpm"><input id="v_sy" type="number" placeholder="Systolic"><input id="v_di" type="number" placeholder="Diastolic"><input id="v_gl" type="number" placeholder="Glucose mg/dL"><input id="v_sp" type="number" placeholder="SpO2 %"><input id="v_sl" type="number" step=".5" placeholder="Sleep hours">
+<button class="p" onclick="addV()">Save reading</button></div><p class="mut">The risk engine is rule-based and transparent; Gemini explains the result.</p><div id="vo"></div></div><div class="card"><h3>History</h3><div id="vh" class="mut"></div></div></section>
+
+<section id="med" class="hide"><h2>Medicines</h2><div class="card"><div class="row"><input id="mn" placeholder="Medicine and dose"><input id="mt" type="time"><button class="p" onclick="addM()">Add reminder</button></div><div id="ml"></div></div></section>
+
+<section id="sos" class="hide"><h2>Emergency</h2><div class="card"><p>If someone is in immediate danger, call your local emergency number now (112 in India, 911 in the US, 999 in the UK).</p>
+<div class="row"><a href="tel:112"><button class="d">Call 112</button></a><button class="p" onclick="sos()">Share my location</button></div><p id="so" class="mut"></p></div></section>
+
+<section id="set" class="hide"><h2>Settings</h2><div class="card"><p class="mut">Your Gemini API key is stored only in this browser. Get one at aistudio.google.com.</p>
+<div class="row"><input id="ky" type="password" placeholder="Gemini API key" style="flex:1"><select id="md"><option>gemini-2.5-flash</option><option>gemini-2.5-pro</option><option>gemini-2.0-flash</option></select><button class="p" onclick="saveK()">Save</button></div>
+<p class="mut">Optional Firebase: paste your web config JSON, save, then sign out and sign in to use Firebase Auth and Firestore.</p>
+<textarea id="fb" rows="4" style="width:100%" placeholder='{"apiKey":"...","authDomain":"...","projectId":"..."}'></textarea>
+<p class="mut">This tool gives general information and is not a medical diagnosis. See a clinician for medical decisions.</p></div></section>
+</main></div>
+<script>
+const $=id=>document.getElementById(id),LS=localStorage;let U=null,D={v:[],m:[],log:[]},FB=null;
+const AG={Risk:"Risk Detection Agent: assess early disease risk from symptoms and vitals, flag urgency.",Medication:"Medication Agent: explain medicines, adherence, interactions in general terms.",Records:"Health Records Agent: organise and summarise the user's history.",Nutrition:"Nutrition Agent: practical, culturally aware diet guidance.",Fitness:"Fitness Agent: safe exercise plans.",Emergency:"Emergency Agent: if danger signs, tell them to call emergency services first.",Appointment:"Appointment Agent: help prepare for and schedule doctor visits.",Mind:"Mind Wellness Agent: supportive stress, sleep and mood guidance.",Report:"Report Analysis Agent: explain lab values in plain language."};
+const KW={Emergency:/chest pain|can't breathe|unconscious|stroke|bleeding|overdose|emergency/i,Medication:/tablet|medicine|dose|pill|drug/i,Nutrition:/diet|food|eat|calorie|protein/i,Fitness:/exercise|workout|run|gym|steps/i,Mind:/stress|anxi|sleep|mood|sad|depress/i,Appointment:/appointment|doctor visit|book/i,Report:/report|lab|test result|cholesterol/i,Records:/history|records/i};
+const key=()=>LS.hg_key||"",model=()=>LS.hg_model||"gemini-2.5-flash";
+async function gem(parts,sys,json){const t0=performance.now();if(!key())throw new Error("Add your Gemini API key in Settings.");
+ const body={contents:[{role:"user",parts}],systemInstruction:{parts:[{text:sys}]}};if(json)body.generationConfig={responseMimeType:"application/json"};
+ const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model()}:generateContent?key=${key()}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+ const j=await r.json();if(!r.ok)throw new Error(j.error?.message||"Gemini request failed");
+ return{txt:(j.candidates?.[0]?.content?.parts||[]).map(p=>p.text||"").join(""),ms:Math.round(performance.now()-t0)}}
+function logA(agent,ms){D.log.push({agent,ms,t:Date.now()});save();render()}
+const esc=s=>s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])),md=s=>esc(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>");
+async function route(q){if(KW.Emergency.test(q))return"Emergency";if(key()){try{const r=await gem([{text:q}],'Route the message to one agent. Reply JSON {"agent":"'+Object.keys(AG).join("|")+'"}',true);const a=JSON.parse(r.txt).agent;if(AG[a])return a}catch(e){}}
+ for(const k in KW)if(KW[k].test(q))return k;return"Risk"}
+function ctx(){const l=D.v.slice(-3);return l.length?"Recent vitals: "+JSON.stringify(l):"No vitals logged."}
+function bub(c,h){const d=document.createElement("div");d.className="msg "+c;d.innerHTML=h;$("cb").appendChild(d);d.scrollIntoView();return d}
+async function send(q){q=q||$("ci").value.trim();if(!q)return;$("ci").value="";bub("u",esc(q));const ag=await route(q);const b=bub("a",`<span class=tag>${ag} Agent</span><br>Thinking...`);
+ try{const r=await gem([{text:q}],"You are VitalGPT-Tasks. "+AG[ag]+" Be concise, plain language, never diagnose, recommend a clinician when unsure. "+ctx());b.innerHTML=`<span class=tag>${ag} Agent · ${r.ms} ms</span><br>`+md(r.txt);logA(ag,r.ms);
+  if($("tts").checked&&window.speechSynthesis)speechSynthesis.speak(new SpeechSynthesisUtterance(r.txt.replace(/\*/g,"")))}
+ catch(e){b.innerHTML=`<span class=tag>${ag} Agent (offline)</span><br>${esc(e.message)} Routing worked locally; connect Gemini for the full answer.`}}
+function mic(){const R=window.SpeechRecognition||window.webkitSpeechRecognition;if(!R)return alert("Voice input is not supported in this browser. Try Chrome.");const r=new R();r.lang="en-IN";$("mic").textContent="Listening...";
+ r.onresult=e=>{$("tts").checked=true;send(e.results[0][0].transcript)};r.onend=()=>$("mic").textContent="Speak";r.start()}
+async function report(){const f=$("rf").files[0];if(!f)return alert("Choose a file first.");const o=$("ro");o.classList.remove("hide");o.textContent="Analysing...";
+ try{let p;if(f.type.startsWith("text/"))p={text:await f.text()};else{const b64=await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result.split(",")[1]);fr.readAsDataURL(f)});p={inline_data:{mime_type:f.type,data:b64}}}
+ const r=await gem([p,{text:"Analyse this medical report."}],"Report Analysis Agent for non-medical readers. Output: **Summary**, **Values outside normal range** (value, normal range, meaning), **Plain-language explanation**, **Questions to ask your doctor**. Never diagnose.");
+ o.innerHTML=md(r.txt)+`<p class=mut>${r.ms} ms</p>`;logA("Report",r.ms)}catch(e){o.textContent=e.message}}
+function riskCalc(v){let s=0,w=[];if(v.sy>=140||v.di>=90){s+=25;w.push("High blood pressure")}else if(v.sy>=130||v.di>=85){s+=12;w.push("Elevated blood pressure")}
+ if(v.gl>=126){s+=25;w.push("High glucose")}else if(v.gl>=100){s+=10;w.push("Borderline glucose")}
+ if(v.hr&&(v.hr>100||v.hr<50)){s+=15;w.push("Abnormal heart rate")}if(v.sp&&v.sp<94){s+=25;w.push("Low oxygen")}if(v.sl&&v.sl<6){s+=10;w.push("Short sleep")}return{s:Math.min(100,s),w}}
+async function addV(){const g=i=>+$(i).value||0,v={t:Date.now(),hr:g("v_hr"),sy:g("v_sy"),di:g("v_di"),gl:g("v_gl"),sp:g("v_sp"),sl:g("v_sl")};if(!v.hr&&!v.sy&&!v.gl)return alert("Enter at least one value.");
+ const r=riskCalc(v);v.risk=r.s;D.v.push(v);save();render();const o=$("vo");o.innerHTML=`<p><b>Risk ${r.s}/100.</b> ${r.w.join(", ")||"No flags from the rules."}</p>`;
+ if(key()){try{const a=await gem([{text:"Vitals: "+JSON.stringify(v)+" Flags: "+r.w.join(", ")}],"Risk Detection Agent. Explain in 3 short sentences and one next step. No diagnosis.");o.innerHTML+=`<div class="msg a">${md(a.txt)}</div>`;logA("Risk",a.ms)}catch(e){}}}
+function addM(){const n=$("mn").value.trim();if(!n)return;D.m.push({n,t:$("mt").value,d:0,tot:0});$("mn").value="";save();render()}
+function tk(i,ok){const m=D.m[i];m.tot++;if(ok)m.d++;save();render()}
+function sos(){if(!navigator.geolocation)return;navigator.geolocation.getCurrentPosition(p=>$("so").innerHTML=`Location: <a href="https://maps.google.com/?q=${p.coords.latitude},${p.coords.longitude}">${p.coords.latitude.toFixed(4)}, ${p.coords.longitude.toFixed(4)}</a>. Share this link with a contact.`,()=>$("so").textContent="Location permission denied.")}
+function chart(){const c=$("cv"),x=c.getContext("2d"),d=D.v.filter(v=>v.hr).slice(-12);x.clearRect(0,0,900,180);if(d.length<2){x.fillStyle="#888";x.fillText("Log two readings to see a trend",20,90);return}
+ const mx=Math.max(...d.map(v=>v.hr))+10,mn=Math.min(...d.map(v=>v.hr))-10;x.strokeStyle=getComputedStyle(document.body).getPropertyValue("--pri");x.lineWidth=3;x.beginPath();
+ d.forEach((v,i)=>{const X=20+i*(860/(d.length-1)),Y=170-(v.hr-mn)/(mx-mn)*150;i?x.lineTo(X,Y):x.moveTo(X,Y)});x.stroke()}
+function render(){const l=D.v[D.v.length-1];$("rs").textContent=l?l.risk:"-";$("rl").textContent=l?(l.risk>=50?"High - consider seeing a doctor":l.risk>=25?"Moderate - monitor":"Low"):"Log vitals to calculate";
+ const t=D.m.reduce((a,m)=>a+m.tot,0),d=D.m.reduce((a,m)=>a+m.d,0);$("ad").textContent=t?Math.round(d/t*100)+"%":"-";
+ $("ac").textContent=D.log.length;const av=D.log.length?Math.round(D.log.reduce((a,x)=>a+x.ms,0)/D.log.length):0;$("al").textContent="avg latency "+(av?av+" ms":"-");
+ $("log").innerHTML=D.log.slice(-6).reverse().map(x=>`${new Date(x.t).toLocaleTimeString()} · ${x.agent} Agent · ${x.ms} ms`).join("<br>")||"No activity yet.";
+ $("vh").innerHTML=D.v.slice(-8).reverse().map(v=>`${new Date(v.t).toLocaleDateString()}: HR ${v.hr||"-"}, BP ${v.sy||"-"}/${v.di||"-"}, glucose ${v.gl||"-"}, risk ${v.risk}`).join("<br>")||"No readings yet.";
+ $("ml").innerHTML=D.m.map((m,i)=>`<div class="row" style="margin-top:8px"><b>${esc(m.n)}</b> <span class=mut>${m.t||""}</span><button class="p" onclick="tk(${i},1)">Taken</button><button class="p" onclick="tk(${i},0)">Missed</button><span class=mut>${m.d}/${m.tot}</span></div>`).join("");chart()}
+function save(){if(!U)return;LS["hg_d_"+U.id]=JSON.stringify(D);if(FB&&U.fb)FB.firestore().doc("users/"+U.id).set({d:JSON.stringify(D)}).catch(()=>{})}
+async function sha(s){return[...new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s)))].map(b=>b.toString(16).padStart(2,"0")).join("")}
+async function loadFB(){if(FB||!LS.hg_fb)return;const c=JSON.parse(LS.hg_fb);for(const f of["app","auth","firestore"])await new Promise((r,j)=>{const s=document.createElement("script");s.src=`https://www.gstatic.com/firebasejs/10.12.2/firebase-${f}-compat.js`;s.onload=r;s.onerror=j;document.head.appendChild(s)});firebase.initializeApp(c);FB=firebase}
+async function auth(mode){const e=$("em").value.trim().toLowerCase(),p=$("pw").value;$("aerr").textContent="";if(!e||p.length<6)return $("aerr").textContent="Enter an email and a password of 6+ characters.";
+ try{if(LS.hg_fb){await loadFB();const c=mode=="up"?await FB.auth().createUserWithEmailAndPassword(e,p):await FB.auth().signInWithEmailAndPassword(e,p);const doc=await FB.firestore().doc("users/"+c.user.uid).get();
+  U={id:c.user.uid,fb:1};LS.hg_u=JSON.stringify(U);if(doc.exists)D=JSON.parse(doc.data().d);return start()}
+ const us=JSON.parse(LS.hg_users||"{}"),h=await sha(p);if(mode=="up"){if(us[e])return $("aerr").textContent="Account exists. Sign in instead.";us[e]=h;LS.hg_users=JSON.stringify(us)}else if(us[e]!==h)return $("aerr").textContent="Wrong email or password.";
+ U={id:e};LS.hg_u=JSON.stringify(U);D=JSON.parse(LS["hg_d_"+e]||'{"v":[],"m":[],"log":[]}');start()}catch(x){$("aerr").textContent=x.message}}
+function out(){delete LS.hg_u;U=null;location.reload()}
+function saveK(){if($("ky").value)LS.hg_key=$("ky").value;LS.hg_model=$("md").value;try{if($("fb").value.trim()){JSON.parse($("fb").value);LS.hg_fb=$("fb").value}}catch(e){return alert("Firebase config is not valid JSON.")}alert("Saved.")}
+function start(){$("auth").classList.add("hide");$("app").classList.remove("hide");if(!D.log)D.log=[];if(LS.hg_model)$("md").value=LS.hg_model;render();bub("a","<span class=tag>Orchestrator</span><br>Hi. Ask me anything about your health. I route each question to the right agent. Add your Gemini key in Settings to enable live answers.")}
+document.querySelectorAll("nav [data-t]").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button").forEach(x=>x.classList.remove("on"));b.classList.add("on");document.querySelectorAll("main section").forEach(s=>s.classList.toggle("hide",s.id!=b.dataset.t));render()});
+$("ci").onkeydown=e=>{if(e.key=="Enter")send()};
+if(LS.hg_u){U=JSON.parse(LS.hg_u);D=JSON.parse(LS["hg_d_"+U.id]||'{"v":[],"m":[],"log":[]}');start()}else $("auth").classList.remove("hide");
+</script></body></html>
